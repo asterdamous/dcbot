@@ -4,6 +4,7 @@ from discord.utils import get
 from PIL import Image, ImageDraw, ImageFont, ImageSequence
 import io
 
+# Setup the bot with command prefix '-'
 intents = discord.Intents.default()
 intents.members = True
 intents.reactions = True
@@ -11,6 +12,7 @@ intents.guilds = True
 intents.messages = True
 bot = commands.Bot(command_prefix='-', intents=intents)
 
+# IDs for channels and roles
 WELCOME_CHANNEL_ID = 1256531648120492032
 CONFESSION_CHANNEL_ID = 1256581166161592330
 MOD_LOG_CHANNEL_ID = 971355896917659658
@@ -20,38 +22,28 @@ VERIFICATION_MESSAGE_ID = None
 MODERATOR_ROLE_ID = [748841518240104450, 781136798155145218] 
 VERIFIED_ROLE_ID = 971355969818882078
 
+# Check if the user has any of the moderator roles
 def is_moderator():
     def predicate(ctx):
         return any(role.id in MODERATOR_ROLE_ID for role in ctx.author.roles)
     return commands.check(predicate)
 
-# Welcoming card
-def create_welcome_card(member):
+# Send welcome GIF
+async def send_welcome_gif(channel):
+    with open("img/welcome.gif", "rb") as gif_file:
+        await channel.send(file=discord.File(gif_file, 'welcome.gif'))
+
+# Send welcome message
+async def send_welcome_message(channel, member):
     verification_channel = bot.get_channel(VERIFICATION_CHANNEL_ID)
     rules_channel = bot.get_channel(RULES_CHANNEL_ID)
-    
-    with Image.open("img/welcome.gif") as im:
-        frames = []
-        font = ImageFont.truetype("arial.ttf", 30)
-        message = (f"Welcome to sick's lair {member.name}!\n"
-                   f"Please read {verification_channel.mention} for verification and "
-                   f"{rules_channel.mention} for server's rules.\n"
-                   "Thank you and enjoy in our server!")
+    message = (f"Welcome to sick's lair {member.name}!\n"
+               f"Please read {verification_channel.mention} for verification and "
+               f"{rules_channel.mention} for server's rules.\n"
+               "Thank you and enjoy in our server!")
+    await channel.send(message)
 
-        for frame in ImageSequence.Iterator(im):
-            frame = frame.convert("RGBA")
-            draw = ImageDraw.Draw(frame)
-            draw.text((10, 10), message, font=font, fill="white")
-            b = io.BytesIO()
-            frame.save(b, format="GIF")
-            frame = Image.open(b)
-            frames.append(frame)
-
-        b = io.BytesIO()
-        frames[0].save(b, format="GIF", save_all=True, append_images=frames[1:], loop=0)
-        b.seek(0)
-        return b
-
+# Send verification message
 @bot.event
 async def on_ready():
     global VERIFICATION_MESSAGE_ID
@@ -69,8 +61,8 @@ async def on_ready():
 async def on_member_join(member):
     channel = bot.get_channel(WELCOME_CHANNEL_ID)
     if channel:
-        welcome_card = create_welcome_card(member)
-        await channel.send(file=discord.File(welcome_card, 'welcome.gif'))
+        await send_welcome_gif(channel)
+        await send_welcome_message(channel, member)
 
 # Reactions for verification
 @bot.event
@@ -102,30 +94,35 @@ async def on_raw_reaction_add(payload):
             except AttributeError as e:
                 print(f"AttributeError: {e}")
 
+# Kick command
 @bot.command()
 @is_moderator()
 async def kick(ctx, member: discord.Member, *, reason=None):
     await member.kick(reason=reason)
     await ctx.send(f'User {member} has been kicked for: {reason}')
 
+# Ban command
 @bot.command()
 @is_moderator()
 async def ban(ctx, member: discord.Member, *, reason=None):
     await member.ban(reason=reason)
     await ctx.send(f'User {member} has been banned for: {reason}')
 
+# Add role command
 @bot.command()
 @is_moderator()
 async def addrole(ctx, member: discord.Member, role: discord.Role):
     await member.add_roles(role)
     await ctx.send(f'Role {role} has been added to {member}')
 
+# Remove role command
 @bot.command()
 @is_moderator()
 async def removerole(ctx, member: discord.Member, role: discord.Role):
     await member.remove_roles(role)
     await ctx.send(f'Role {role} has been removed from {member}')
 
+# Confession command
 @bot.command()
 async def confess(ctx, *, confession):
     confession_channel = bot.get_channel(CONFESSION_CHANNEL_ID)
@@ -137,6 +134,7 @@ async def confess(ctx, *, confession):
 
     await ctx.send('Your confession has been sent.')
 
+# Error handler for missing permissions
 @kick.error
 @ban.error
 @addrole.error
